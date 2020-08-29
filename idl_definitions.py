@@ -60,6 +60,8 @@ IdlArgument is 'picklable', as it is stored in interfaces_info.
 Design doc: http://www.chromium.org/developers/design-documents/idl-compiler
 """
 
+import re
+import os
 import abc
 
 from IDLParserTool.idl_types import IdlAnnotatedType
@@ -91,6 +93,48 @@ class TypedObject(object):
 # Definitions (main container class)
 ################################################################################
 
+PROMISE_TYPE_EXT_CLASS = [
+    'Sequence',
+    'FrozenArray',
+    'Promise'
+]
+
+PROMISE_TYPE_BASE_CLASS = [
+    'PrimitiveType',
+    'Typeref',
+    'Any',
+    'StringType'
+]
+
+def do_handle_promise_type(idl_type_node) -> str:
+    if idl_type_node.GetClass() in PROMISE_TYPE_EXT_CLASS:
+        assert len(idl_type_node.GetChildren()) == 1
+        real_type = idl_type_node.GetChildren()[0]
+        assert len(real_type.GetChildren()) == 1
+        real_type = real_type.GetChildren()[0]
+        return f"{idl_type_node.GetClass().lower()}<{handle_promise_type(idl_type_node)}>"
+    elif idl_type_node.GetClass() in PROMISE_TYPE_BASE_CLASS:
+        return f"{idl_type_node.GetName()}"
+    elif idl_type_node.GetClass() == 'UnionType':
+        sub_types = []
+        for child in idl_type_node.GetChildren():
+            for node in child.GetChildren():
+                if node.GetClass() in PROMISE_TYPE_BASE_CLASS:
+                    sub_types.append(f"{node.GetName()}")
+                else:
+                    sub_types.append(do_handle_promise_type(node))
+        return f"({' or '.join(sub_types)})"
+    else:
+        raise Exception("Unknown type node!")
+
+def handle_promise_type(idl_type_node) -> str:
+    node = idl_type_node
+    assert node
+    assert len(node.GetChildren()) == 1
+    _node = node.GetChildren()[0]
+    assert len(_node.GetChildren()) == 1
+    maybe_type = _node.GetChildren()[0]
+    return do_handle_promise_type(maybe_type)
 
 class IdlDefinitions(object):
     def __init__(self, node):
@@ -102,7 +146,8 @@ class IdlDefinitions(object):
         self.interfaces = {}
         self.first_name = None
         self.typedefs = {}
-
+        self.node = node
+        
         node_class = node.GetClass()
         if node_class != 'File':
             raise ValueError('Unrecognized node class: %s' % node_class)
@@ -134,6 +179,194 @@ class IdlDefinitions(object):
                     self.first_name = dictionary.name
             else:
                 raise ValueError('Unrecognized node class: %s' % child_class)
+    
+    @property
+    def filepath(self):
+        return self.node.GetProperties()['FILENAME']
+
+    def format_includes(self):
+        include_data_list = []
+
+        for include in self.includes:
+            include_data = {
+                'Name': include.interface,
+                'Mixin': [include.mixin]
+            }
+            include_data_list.append(include_data)
+
+        return include_data_list
+
+    def format_callbacks(self):
+        callback_data_list = []
+
+        for _, callback in self.callback_functions.items():
+            callback_data = {
+                'Name': callback.name,
+                'Return': None,
+                'Arguments': []
+            }
+            if str(callback.idl_type.name) == 'Promise':
+                real_idl_type = f"Promise<{handle_promise_type(callback.idl_type.node)}>"
+            else:
+                real_idl_type = callback.idl_type.name
+            return_data = {
+                'Type': self.try_get_array_type(real_idl_type)[0] if self.try_get_array_type(real_idl_type) else real_idl_type,
+                'ArrayType': self.try_get_array_type(real_idl_type)[1] if self.try_get_array_type(real_idl_type) else ''
+            }
+            callback_data['Return'] = return_data
+            arg_idx = 1
+            for arg in callback.arguments:
+                arg_data = {
+                    'Type': self.try_get_array_type(arg.idl_type.name)[0] if self.try_get_array_type(arg.idl_type.name) else arg.idl_type.name,
+                    'ArrayType': self.try_get_array_type(arg.idl_type.name)[1] if self.try_get_array_type(arg.idl_type.name) else '',
+                    'Default': arg.default_value.value if arg.default_value else None,
+                    'Optional': arg.is_optional,
+                    'Pos': arg_idx
+                }
+                arg_idx += 1
+                callback_data['Arguments'].append(arg_data)
+            callback_data_list.append(callback_data)
+
+        return callback_data_list
+
+    def format_typedefs(self):
+        typedef_data_list = []
+
+        for _, typedef in self.typedefs.items():
+            typedef_data = {
+                'Name': typedef.name,
+                'Type': typedef.idl_type.name
+            }
+            typedef_data_list.append(typedef_data)
+
+        return typedef_data_list
+
+    def format_enumerations(self):
+        enumeration_data_list = []
+
+        for _, enumeration in self.enumerations.items():
+            enumeration_data = {
+                'Name': enumeration.name,
+                'Values': []
+            }
+            for value in enumeration.values:
+                enumeration_data['Values'].append(value)
+            enumeration_data_list.append(enumeration_data)
+
+        return enumeration_data_list
+
+    def format_dictionaries(self):
+        dictionary_data_list = []
+        for name, dictionary in self.dictionaries.items():
+            dictionary_data = {
+                'Name': name,
+                'Members': []
+            }
+            for member in dictionary.members:
+                member_data = {
+                    'Name': member.name,
+                    'Type': self.try_get_array_type(member.idl_type.name)[0] if self.try_get_array_type(member.idl_type.name) else member.idl_type.name,
+                    'Required': member.is_required,
+                    'Default': member.default_value.value if member.default_value else None,
+                    'ArrayType': self.try_get_array_type(member.idl_type.name)[1] if self.try_get_array_type(member.idl_type.name) else ''
+                }
+                dictionary_data['Members'].append(member_data)
+            dictionary_data_list.append(dictionary_data)
+
+        return dictionary_data_list
+
+    def format_interface(self):
+        interface_data_list = []
+        for name, interface in self.interfaces.items():
+            interface_data = {
+                'Name': name,
+                'Exposed': [],
+                'Parent': '',
+                'Includes': [],
+                'Constructors': [],
+                'Attributes': [],
+                'Methods': [],
+                'IsMixin': interface.is_mixin,
+                'NoInterfaceObject': True if 'NoInterfaceObject' in interface.extended_attributes.keys() else False,
+                'LegacyAlias': interface.extended_attributes['LegacyWindowAlias'] if interface.extended_attributes.get('LegacyWindowAlias') else ''
+            }
+            if interface.parent:
+                interface_data['Parent'] = interface.parent
+
+            for constructor in interface.constructors:
+                if constructor.name == 'NamedConstructor':
+                    constructor_name = interface.extended_attributes['NamedConstructor']
+                elif interface_data['NoInterfaceObject'] and interface_data['LegacyAlias']:
+                    constructor_name = interface_data['LegacyAlias']
+                else:
+                    constructor_name = interface.name
+                constructor_data = {
+                    'Name':constructor_name,
+                    'Arguments': []
+                }
+                arg_idx = 1
+                for arg in constructor.arguments:
+                    arg_data = {
+                        'Type': self.try_get_array_type(arg.idl_type.name)[0] if self.try_get_array_type(arg.idl_type.name) else arg.idl_type.name,
+                        'ArrayType': self.try_get_array_type(arg.idl_type.name)[1] if self.try_get_array_type(arg.idl_type.name) else '',
+                        'Default': arg.default_value.value if arg.default_value else None,
+                        'Optional': arg.is_optional,
+                        'Pos': arg_idx
+                    }
+                    arg_idx += 1
+                    constructor_data['Arguments'].append(arg_data)
+                interface_data['Constructors'].append(constructor_data)
+
+            for attr in interface.attributes:
+                attr_data = {
+                    'Name': attr.name,
+                    'Type': attr.idl_type.name,
+                    'Readonly': attr.is_read_only,
+                    'Static': attr.is_static,
+                    'ArrayType': ''
+                }
+                interface_data['Attributes'].append(attr_data)
+            
+            for method in interface.operations:
+                method_data = {
+                    'Name': method.name,
+                    'Getter': method.is_getter,
+                    'Setter': method.is_setter,
+                    'Return': None,
+                    'Arguments': []
+                }
+                if method.idl_type.name == 'Promise':
+                    real_idl_type = f"Promise<{handle_promise_type(method.idl_type.node)}>"
+                else:
+                    real_idl_type = method.idl_type.name
+                return_data = {
+                    'Type': self.try_get_array_type(real_idl_type)[0] if self.try_get_array_type(real_idl_type) else real_idl_type,
+                    'ArrayType': self.try_get_array_type(real_idl_type)[1] if self.try_get_array_type(real_idl_type) else ''
+                }
+
+                method_data['Return'] = return_data
+                arg_idx = 1
+                for arg in method.arguments:
+                    arg_data = {
+                        'Type': self.try_get_array_type(arg.idl_type.name)[0] if self.try_get_array_type(arg.idl_type.name) else arg.idl_type.name,
+                        'ArrayType': self.try_get_array_type(arg.idl_type.name)[1] if self.try_get_array_type(arg.idl_type.name) else '',
+                        'Default': arg.default_value.value if arg.default_value else None,
+                        'Optional': arg.is_optional,
+                        'Pos': arg_idx
+                    }
+                    arg_idx += 1
+                    method_data['Arguments'].append(arg_data)
+                interface_data['Methods'].append(method_data)
+            
+            interface_data_list.append(interface_data)
+
+        return interface_data_list
+
+    def try_get_array_type(self, idl_type:str):
+        if idl_type.endswith('Sequence'):
+            return (re.match(r"(.+)Sequence", idl_type).group(1), 'Sequence')
+        else:
+            return None
 
     def accept(self, visitor):
         visitor.visit_definitions(self)
@@ -298,6 +531,7 @@ class IdlTypedef(object):
 
 class IdlInterface(object):
     def __init__(self, node):
+        self.node = node
         self.attributes = []
         self.constants = []
         self.constructors = []
@@ -626,6 +860,16 @@ class IdlOperation(TypedObject):
 
         if not node:
             return
+        self.node = node
+        if self.node.GetProperties().get('GETTER') is True:
+            self.is_getter = True
+        else:
+            self.is_getter = False
+        
+        if self.node.GetProperties().get('SETTER') is True:
+            self.is_setter = True
+        else:
+            self.is_setter = False
 
         self.name = node.GetName()
 
@@ -1123,7 +1367,9 @@ def type_node_inner_to_type(node):
     elif node_class == 'UnionType':
         return union_type_node_to_idl_union_type(node)
     elif node_class == 'Promise':
-        return IdlType('Promise')
+        idl_type = IdlType('Promise')
+        idl_type.node = node
+        return idl_type
     elif node_class == 'Record':
         return record_node_to_type(node)
     raise ValueError('Unrecognized node class: %s' % node_class)

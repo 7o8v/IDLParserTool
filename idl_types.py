@@ -148,6 +148,8 @@ class IdlType(IdlTypeBase):
 
     def __init__(self, base_type, is_unrestricted=False):
         super(IdlType, self).__init__()
+        self.promise_type = None
+        self.node = None
         if is_unrestricted:
             self.base_type = 'unrestricted %s' % base_type
         else:

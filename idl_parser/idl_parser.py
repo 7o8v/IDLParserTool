@@ -1273,6 +1273,12 @@ class IDLParser(object):
 #
 # Attempts to parse the current data loaded in the lexer.
 #
+  def lookup_nodes(self, node, deep=0):
+    pad = ' '*deep
+    print(f"{pad}{node.GetProperties()}")
+    for child in node.GetChildren():
+      self.lookup_nodes(child, deep+1)
+
   def ParseText(self, filename, data):
     self._parse_errors = 0
     self._parse_warnings = 0
@@ -1283,6 +1289,7 @@ class IDLParser(object):
     try:
       self.lexer.Tokenize(data, filename)
       nodes = self.yaccobj.parse(lexer=self.lexer) or []
+      #self.lookup_nodes(nodes[0])
       name = self.BuildAttribute('NAME', filename)
       return IDLNode('File', filename, 0, 0, nodes + [name])
 
