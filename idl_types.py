@@ -393,7 +393,9 @@ class IdlUnionType(IdlTypeBase):
 
         http://heycam.github.io/webidl/#dfn-type-name
         """
-        return 'Or'.join(member_type.name for member_type in self.member_types)
+        #return 'Or'.join(member_type.name for member_type in self.member_types)
+        all_types = ', '.join(member_type.name for member_type in self.member_types)
+        return f"Union({all_types})"
 
     def resolve_typedefs(self, typedefs):
         self.member_types = [
@@ -469,7 +471,8 @@ class IdlSequenceType(IdlArrayOrSequenceType):
 
     @property
     def name(self):
-        return self.element_type.name + 'Sequence'
+        #return self.element_type.name + 'Sequence'
+        return f"Sequence({self.element_type.name})"
 
     @property
     def is_sequence_type(self):
@@ -485,7 +488,8 @@ class IdlFrozenArrayType(IdlArrayOrSequenceType):
 
     @property
     def name(self):
-        return self.element_type.name + 'Array'
+        #return self.element_type.name + 'Array'
+        return f"Array({self.element_type.name})"
 
     @property
     def is_frozen_array(self):
@@ -534,7 +538,8 @@ class IdlRecordType(IdlTypeBase):
 
     @property
     def name(self):
-        return self.key_type.name + self.value_type.name + 'Record'
+        #return self.key_type.name + self.value_type.name + 'Record'
+        return f"Record({self.key_type.name}, {self.value_type.name})"
 
 
 ################################################################################
@@ -592,7 +597,8 @@ class IdlNullableType(IdlTypeBase):
 
     @property
     def name(self):
-        return self.inner_type.name + 'OrNull'
+        #return self.inner_type.name + 'OrNull'
+        return self.inner_type.name
 
     @property
     def enum_values(self):
@@ -673,7 +679,8 @@ class IdlAnnotatedType(IdlTypeBase):
         annotation = ''.join(
             (key + ('' if val is None else val))
             for key, val in sorted(self.extended_attributes.items()))
-        return self.inner_type.name + annotation
+        #return self.inner_type.name + annotation
+        return self.inner_type.name
 
     def resolve_typedefs(self, typedefs):
         self.inner_type = self.inner_type.resolve_typedefs(typedefs)

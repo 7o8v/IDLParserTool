@@ -210,17 +210,15 @@ class IdlDefinitions(object):
             else:
                 real_idl_type = callback.idl_type.name
             return_data = {
-                'Type': self.try_get_array_type(real_idl_type)[0] if self.try_get_array_type(real_idl_type) else real_idl_type,
-                'RawType': str(callback.idl_type),
-                'ArrayType': self.try_get_array_type(real_idl_type)[1] if self.try_get_array_type(real_idl_type) else ''
+                'Type': real_idl_type,
+                'RawType': str(callback.idl_type)
             }
             callback_data['Return'] = return_data
             arg_idx = 1
             for arg in callback.arguments:
                 arg_data = {
-                    'Type': self.try_get_array_type(arg.idl_type.name)[0] if self.try_get_array_type(arg.idl_type.name) else arg.idl_type.name,
+                    'Type': arg.idl_type.name,
                     'RawType': str(arg.idl_type),
-                    'ArrayType': self.try_get_array_type(arg.idl_type.name)[1] if self.try_get_array_type(arg.idl_type.name) else '',
                     'Default': arg.default_value.value if arg.default_value else None,
                     'Optional': arg.is_optional,
                     'Pos': arg_idx
@@ -268,12 +266,10 @@ class IdlDefinitions(object):
             for member in dictionary.members:
                 member_data = {
                     'Name': member.name,
-                    #'Type': self.try_get_array_type(member.idl_type.name)[0] if self.try_get_array_type(member.idl_type.name) else member.idl_type.name,
                     'Type': member.idl_type.name,
                     'RawType': str(member.idl_type),
                     'Required': member.is_required,
-                    'Default': member.default_value.value if member.default_value else None,
-                    'ArrayType': self.try_get_array_type(member.idl_type.name)[1] if self.try_get_array_type(member.idl_type.name) else ''
+                    'Default': member.default_value.value if member.default_value else None
                 }
                 dictionary_data['Members'].append(member_data)
             dictionary_data_list.append(dictionary_data)
@@ -292,6 +288,7 @@ class IdlDefinitions(object):
                 'Attributes': [],
                 'Methods': [],
                 'IsMixin': interface.is_mixin,
+                'ImplementedAs': interface.extended_attributes.get('ImplementedAs'),
                 'NoInterfaceObject': True if 'NoInterfaceObject' in interface.extended_attributes.keys() else False,
                 'LegacyAlias': interface.extended_attributes['LegacyWindowAlias'] if interface.extended_attributes.get('LegacyWindowAlias') else ''
             }
@@ -312,9 +309,8 @@ class IdlDefinitions(object):
                 arg_idx = 1
                 for arg in constructor.arguments:
                     arg_data = {
-                        'Type': self.try_get_array_type(arg.idl_type.name)[0] if self.try_get_array_type(arg.idl_type.name) else arg.idl_type.name,
+                        'Type': arg.idl_type.name,
                         'RawType': str(arg.idl_type),
-                        'ArrayType': self.try_get_array_type(arg.idl_type.name)[1] if self.try_get_array_type(arg.idl_type.name) else '',
                         'Default': arg.default_value.value if arg.default_value else None,
                         'Optional': arg.is_optional,
                         'Pos': arg_idx
@@ -347,18 +343,16 @@ class IdlDefinitions(object):
                 else:
                     real_idl_type = method.idl_type.name
                 return_data = {
-                    'Type': self.try_get_array_type(real_idl_type)[0] if self.try_get_array_type(real_idl_type) else real_idl_type,
-                    'RawType': str(method.idl_type),
-                    'ArrayType': self.try_get_array_type(real_idl_type)[1] if self.try_get_array_type(real_idl_type) else ''
+                    'Type': real_idl_type,
+                    'RawType': str(method.idl_type)
                 }
 
                 method_data['Return'] = return_data
                 arg_idx = 1
                 for arg in method.arguments:
                     arg_data = {
-                        'Type': self.try_get_array_type(arg.idl_type.name)[0] if self.try_get_array_type(arg.idl_type.name) else arg.idl_type.name,
+                        'Type': arg.idl_type.name,
                         'RawType': str(arg.idl_type),
-                        'ArrayType': self.try_get_array_type(arg.idl_type.name)[1] if self.try_get_array_type(arg.idl_type.name) else '',
                         'Default': arg.default_value.value if arg.default_value else None,
                         'Optional': arg.is_optional,
                         'Pos': arg_idx
@@ -370,16 +364,6 @@ class IdlDefinitions(object):
             interface_data_list.append(interface_data)
 
         return interface_data_list
-
-    def fix_type(self, data:dict):
-        fixed_type = data['Type'].replace('OrNull', '')
-        
-
-    def try_get_array_type(self, idl_type:str):
-        if idl_type.endswith('Sequence'):
-            return (re.match(r"(.+)Sequence", idl_type).group(1), 'Sequence')
-        else:
-            return None
 
     def accept(self, visitor):
         visitor.visit_definitions(self)
