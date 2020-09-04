@@ -157,7 +157,7 @@ class IDLNode(object):
         self.out.append(tab + str(node))
 
         proplist = []
-        for key, value in node.GetProperties().iteritems():
+        for key, value in node.GetProperties().items():
           if key not in self.props:
             proplist.append(tab + '  %s: %s' % (key, str(value)))
         if proplist:

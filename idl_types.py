@@ -271,6 +271,37 @@ class IdlType(IdlTypeBase):
             return resolved_type.resolve_typedefs(typedefs)
         return self
 
+################################################################################
+# IdlPromiseType
+################################################################################
+
+class IdlPromiseType(IdlTypeBase):
+    
+    def __init__(self, member_types):
+        super(IdlPromiseType, self).__init__()
+        self.member_types = member_types
+
+    def __str__(self):
+        return f"Promise({', '.join(str(member_type) for member_type in self.member_types)})"
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, rhs):
+        return self.name == rhs.name
+
+    def __getstate__(self):
+        return {
+            'member_types': self.member_types,
+        }
+
+    def __setstate__(self, state):
+        self.member_types = state['member_types']
+
+    @property
+    def name(self):
+        all_types = ', '.join(member_type.name for member_type in self.member_types)
+        return f"Promise({all_types})"
 
 ################################################################################
 # IdlUnionType
@@ -409,7 +440,6 @@ class IdlUnionType(IdlTypeBase):
         for member_type in self.member_types:
             for idl_type in member_type.idl_types():
                 yield idl_type
-
 
 ################################################################################
 # IdlArrayOrSequenceType, IdlSequenceType, IdlFrozenArrayType

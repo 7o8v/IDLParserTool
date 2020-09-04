@@ -71,6 +71,7 @@ from IDLParserTool.idl_types import IdlRecordType
 from IDLParserTool.idl_types import IdlSequenceType
 from IDLParserTool.idl_types import IdlType
 from IDLParserTool.idl_types import IdlUnionType
+from IDLParserTool.idl_types import IdlPromiseType
 
 SPECIAL_KEYWORD_LIST = ['GETTER', 'SETTER', 'DELETER']
 
@@ -205,12 +206,8 @@ class IdlDefinitions(object):
                 'Return': None,
                 'Arguments': []
             }
-            if str(callback.idl_type.name) == 'Promise':
-                real_idl_type = f"Promise<{handle_promise_type(callback.idl_type.node)}>"
-            else:
-                real_idl_type = callback.idl_type.name
             return_data = {
-                'Type': real_idl_type,
+                'Type': callback.idl_type.name,
                 'RawType': str(callback.idl_type)
             }
             callback_data['Return'] = return_data
@@ -279,9 +276,12 @@ class IdlDefinitions(object):
     def format_interface(self):
         interface_data_list = []
         for name, interface in self.interfaces.items():
+            exposures = interface.extended_attributes.get('Exposed')
+            if not exposures:
+                exposures = []
             interface_data = {
                 'Name': name,
-                'Exposed': [],
+                'Exposed': [ {'Name': exposure.exposed, 'RuntimeEnabled': exposure.runtime_enabled} for exposure in exposures ],
                 'Parent': '',
                 'Includes': [],
                 'Constructors': [],
@@ -338,12 +338,8 @@ class IdlDefinitions(object):
                     'Return': None,
                     'Arguments': []
                 }
-                if method.idl_type.name == 'Promise':
-                    real_idl_type = f"Promise<{handle_promise_type(method.idl_type.node)}>"
-                else:
-                    real_idl_type = method.idl_type.name
                 return_data = {
-                    'Type': real_idl_type,
+                    'Type': method.idl_type.name,
                     'RawType': str(method.idl_type)
                 }
 
@@ -1364,13 +1360,20 @@ def type_node_inner_to_type(node):
     elif node_class == 'UnionType':
         return union_type_node_to_idl_union_type(node)
     elif node_class == 'Promise':
-        idl_type = IdlType('Promise')
-        idl_type.node = node
-        return idl_type
+        return promise_node_to_type(node)
+        # idl_type = IdlType('Promise')
+        # idl_type.node = node
+        # return idl_type
     elif node_class == 'Record':
         return record_node_to_type(node)
     raise ValueError('Unrecognized node class: %s' % node_class)
 
+def promise_node_to_type(node):
+    member_types = [
+        type_node_to_type(member_type_node)
+        for member_type_node in node.GetChildren()
+    ]
+    return IdlPromiseType(member_types)
 
 def record_node_to_type(node):
     children = node.GetChildren()
