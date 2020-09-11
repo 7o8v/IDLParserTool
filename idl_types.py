@@ -15,6 +15,7 @@ IdlTypeBase
 
 IdlTypes are picklable because we store them in interfaces_info.
 """
+import random
 
 from collections import defaultdict
 
@@ -130,6 +131,9 @@ class IdlTypeBase(object):
         """A generator which yields IdlTypes which are referenced from |self|,
         including itself."""
         yield self
+
+    def is_nested(self) -> bool:
+        return False
 
 
 ################################################################################
@@ -303,6 +307,12 @@ class IdlPromiseType(IdlTypeBase):
         all_types = ', '.join(member_type.name for member_type in self.member_types)
         return f"Promise({all_types})"
 
+    def is_nested(self):
+        return True
+
+    def pick_one_element_type(self):
+        return random.choice(self.member_types)
+
 ################################################################################
 # IdlUnionType
 ################################################################################
@@ -333,6 +343,12 @@ class IdlUnionType(IdlTypeBase):
 
     def __setstate__(self, state):
         self.member_types = state['member_types']
+
+    def is_nested(self):
+        return True
+
+    def pick_one_element_type(self):
+        return random.choice(self.member_types)
 
     @property
     def flattened_member_types(self):
@@ -466,6 +482,12 @@ class IdlArrayOrSequenceType(IdlTypeBase):
         self.element_type = self.element_type.resolve_typedefs(typedefs)
         return self
 
+    def is_nested(self):
+        return True
+
+    def pick_one_element_type(self):
+        return self.element_type
+
     @property
     def is_array_or_sequence_type(self):
         return True
@@ -504,9 +526,15 @@ class IdlSequenceType(IdlArrayOrSequenceType):
         #return self.element_type.name + 'Sequence'
         return f"Sequence({self.element_type.name})"
 
+    def is_nested(self):
+        return True
+
     @property
     def is_sequence_type(self):
         return True
+    
+    def pick_one_element_type(self):
+        return self.element_type
 
 
 class IdlFrozenArrayType(IdlArrayOrSequenceType):
@@ -520,6 +548,12 @@ class IdlFrozenArrayType(IdlArrayOrSequenceType):
     def name(self):
         #return self.element_type.name + 'Array'
         return f"Array({self.element_type.name})"
+
+    def is_nested(self):
+        return True
+
+    def pick_one_element_type(self):
+        return self.element_type
 
     @property
     def is_frozen_array(self):

@@ -94,49 +94,6 @@ class TypedObject(object):
 # Definitions (main container class)
 ################################################################################
 
-PROMISE_TYPE_EXT_CLASS = [
-    'Sequence',
-    'FrozenArray',
-    'Promise'
-]
-
-PROMISE_TYPE_BASE_CLASS = [
-    'PrimitiveType',
-    'Typeref',
-    'Any',
-    'StringType'
-]
-
-def do_handle_promise_type(idl_type_node) -> str:
-    if idl_type_node.GetClass() in PROMISE_TYPE_EXT_CLASS:
-        assert len(idl_type_node.GetChildren()) == 1
-        real_type = idl_type_node.GetChildren()[0]
-        assert len(real_type.GetChildren()) == 1
-        real_type = real_type.GetChildren()[0]
-        return f"{idl_type_node.GetClass().lower()}<{handle_promise_type(idl_type_node)}>"
-    elif idl_type_node.GetClass() in PROMISE_TYPE_BASE_CLASS:
-        return f"{idl_type_node.GetName()}"
-    elif idl_type_node.GetClass() == 'UnionType':
-        sub_types = []
-        for child in idl_type_node.GetChildren():
-            for node in child.GetChildren():
-                if node.GetClass() in PROMISE_TYPE_BASE_CLASS:
-                    sub_types.append(f"{node.GetName()}")
-                else:
-                    sub_types.append(do_handle_promise_type(node))
-        return f"({' or '.join(sub_types)})"
-    else:
-        raise Exception("Unknown type node!")
-
-def handle_promise_type(idl_type_node) -> str:
-    node = idl_type_node
-    assert node
-    assert len(node.GetChildren()) == 1
-    _node = node.GetChildren()[0]
-    assert len(_node.GetChildren()) == 1
-    maybe_type = _node.GetChildren()[0]
-    return do_handle_promise_type(maybe_type)
-
 class IdlDefinitions(object):
     def __init__(self, node):
         """Args: node: AST root node, class == 'File'"""
@@ -324,7 +281,6 @@ class IdlDefinitions(object):
                     'Name': attr.name,
                     'Type': attr.idl_type.name,
                     'RawType': str(attr.idl_type),
-                    'ArrayType': '',
                     'Readonly': attr.is_read_only,
                     'Static': attr.is_static
                 }
@@ -531,6 +487,7 @@ class IdlInterface(object):
         self.custom_constructors = []
         self.extended_attributes = {}
         self.operations = []
+        self.operations_dict = {}
         self.parent = None
         self.stringifier = None
         self.iterable = None
@@ -700,6 +657,13 @@ class IdlInterface(object):
         if self.stringifier is None:
             self.stringifier = other.stringifier
 
+    def operations_to_dict(self):
+        for op in self.operations:
+            ops = self.operations_dict.get(op.name)
+            if ops:
+                ops.append(op)
+            else:
+                self.operations_dict[op.name] = [op]
 
 ################################################################################
 # Attributes
