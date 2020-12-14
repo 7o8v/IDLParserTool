@@ -111,3 +111,13 @@ TreatNullAs=EmptyString
 URL
 Unforgeable
 Unscopable
+
+# Not default extended attributes
+IsCodeLike
+LegacyNoInterfaceObject
+LegacyOverrideBuiltIns
+LegacyTreatNonObjectAsNull
+LegacyUnforgeable
+LegacyLenientThis
+LegacyLenientSetter
+NoAllocDirectCall

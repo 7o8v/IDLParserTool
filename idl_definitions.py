@@ -355,10 +355,68 @@ class IdlDefinitions(object):
             self.callback_functions.update(other.callback_functions)
 
 
+
+################################################################################
+# Arguments
+################################################################################
+
+
+class IdlArgument(TypedObject):
+    def __init__(self, node=None):
+        self.extended_attributes = {}
+        self.idl_type = None
+        self.is_optional = False  # syntax: (optional T)
+        self.is_variadic = False  # syntax: (T...)
+        self.default_value = None
+
+        if not node:
+            return
+
+        self.is_optional = node.GetProperty('OPTIONAL')
+        self.name = node.GetName()
+
+        children = node.GetChildren()
+        for child in children:
+            child_class = child.GetClass()
+            if child_class == 'Type':
+                self.idl_type = type_node_to_type(child)
+            elif child_class == 'ExtAttributes':
+                self.extended_attributes = ext_attributes_node_to_extended_attributes(
+                    child)
+            elif child_class == 'Argument':
+                child_name = child.GetName()
+                if child_name != '...':
+                    raise ValueError(
+                        'Unrecognized Argument node; expected "...", got "%s"'
+                        % child_name)
+                self.is_variadic = bool(child.GetProperty('ELLIPSIS'))
+            elif child_class == 'Default':
+                self.default_value = default_node_to_idl_literal(child)
+            else:
+                raise ValueError('Unrecognized node class: %s' % child_class)
+
+    def accept(self, visitor):
+        visitor.visit_argument(self)
+
+    def __eq__(self, other):
+        return (
+            self.idl_type.name == other.idl_type.name
+            and self.name == other.name
+        )
+
+
+def arguments_node_to_arguments(node):
+    # [Constructor] and [CustomConstructor] without arguments (the bare form)
+    # have None instead of an arguments node, but have the same meaning as using
+    # an empty argument list, [Constructor()], so special-case this.
+    # http://www.w3.org/TR/WebIDL/#Constructor
+    if node is None:
+        return []
+    return [IdlArgument(argument_node) for argument_node in node.GetChildren()]
+
 ################################################################################
 # Callback Functions
 ################################################################################
-
 
 class IdlCallbackFunction(TypedObject):
     def __init__(self, node):
@@ -389,6 +447,15 @@ class IdlCallbackFunction(TypedObject):
         for argument in self.arguments:
             argument.accept(visitor)
 
+    def __eq__(self, other):
+        if self.name == other.name and self.idl_type.name == other.idl_type.name and len(self.arguments) == len(other.arguments):
+            args_num = len(self.arguments)
+            for i in range(0, args_num):
+                if self.arguments[i] != other.arguments[i]:
+                    return False
+            return True
+        else:
+            return False
 
 ################################################################################
 # Dictionary
@@ -419,6 +486,15 @@ class IdlDictionary(object):
         for member in self.members:
             member.accept(visitor)
 
+    def __eq__(self, other):
+        if self.name == other.name and len(self.members) == len(other.members):
+            args_num = len(self.members)
+            for i in range(0, args_num):
+                if self.members[i] != other.members[i]:
+                    return False
+            return True
+        else:
+            return False
 
 class IdlDictionaryMember(TypedObject):
     def __init__(self, node):
@@ -442,6 +518,11 @@ class IdlDictionaryMember(TypedObject):
     def accept(self, visitor):
         visitor.visit_dictionary_member(self)
 
+    def __eq__(self, other):
+        return (
+            self.name == other.name
+            and self.idl_type.name == other.idl_type.name
+        )
 
 ################################################################################
 # Enumerations
@@ -463,6 +544,10 @@ class IdlEnum(object):
             Return a random enumration.
         '''
         return random.choice(self.values)
+    
+    def merge(self, other):
+        self.values.extend(other.values)
+        self.values = list(set(self.values))
 
 ################################################################################
 # Typedefs
@@ -669,6 +754,21 @@ class IdlInterface(object):
         self.attributes.extend(other.attributes)
         self.constants.extend(other.constants)
         self.operations.extend(other.operations)
+        
+        for k, v in other.extended_attributes.items():
+            if not self.extended_attributes.get(k):
+                self.extended_attributes[k] = v
+            elif k == 'Exposed':
+                self.extended_attributes[k] = list(set(
+                    self.extended_attributes[k] + v
+                ))
+            # TODO: 合并时处理其余扩展属性
+            elif v != self.extended_attributes[k]:
+                # error_msg = f"Partial interface {self.name} has different extended attribute {k}: {v} | {self.extended_attributes[k]}"
+                # print(error_msg)
+                # raise Exception(error_msg)
+                pass
+
         if self.stringifier is None:
             self.stringifier = other.stringifier
 
@@ -883,59 +983,6 @@ class IdlOperation(TypedObject):
 
 
 ################################################################################
-# Arguments
-################################################################################
-
-
-class IdlArgument(TypedObject):
-    def __init__(self, node=None):
-        self.extended_attributes = {}
-        self.idl_type = None
-        self.is_optional = False  # syntax: (optional T)
-        self.is_variadic = False  # syntax: (T...)
-        self.default_value = None
-
-        if not node:
-            return
-
-        self.is_optional = node.GetProperty('OPTIONAL')
-        self.name = node.GetName()
-
-        children = node.GetChildren()
-        for child in children:
-            child_class = child.GetClass()
-            if child_class == 'Type':
-                self.idl_type = type_node_to_type(child)
-            elif child_class == 'ExtAttributes':
-                self.extended_attributes = ext_attributes_node_to_extended_attributes(
-                    child)
-            elif child_class == 'Argument':
-                child_name = child.GetName()
-                if child_name != '...':
-                    raise ValueError(
-                        'Unrecognized Argument node; expected "...", got "%s"'
-                        % child_name)
-                self.is_variadic = bool(child.GetProperty('ELLIPSIS'))
-            elif child_class == 'Default':
-                self.default_value = default_node_to_idl_literal(child)
-            else:
-                raise ValueError('Unrecognized node class: %s' % child_class)
-
-    def accept(self, visitor):
-        visitor.visit_argument(self)
-
-
-def arguments_node_to_arguments(node):
-    # [Constructor] and [CustomConstructor] without arguments (the bare form)
-    # have None instead of an arguments node, but have the same meaning as using
-    # an empty argument list, [Constructor()], so special-case this.
-    # http://www.w3.org/TR/WebIDL/#Constructor
-    if node is None:
-        return []
-    return [IdlArgument(argument_node) for argument_node in node.GetChildren()]
-
-
-################################################################################
 # Stringifiers
 ################################################################################
 
@@ -1078,6 +1125,11 @@ class Exposure:
         self.exposed = exposed
         self.runtime_enabled = runtime_enabled
 
+    def __str__(self):
+        return self.exposed
+
+    def __repr__(self):
+        return self.exposed
 
 def ext_attributes_node_to_extended_attributes(node):
     """
