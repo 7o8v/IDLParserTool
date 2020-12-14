@@ -311,7 +311,11 @@ class IdlPromiseType(IdlTypeBase):
         return True
 
     def pick_one_element_type(self):
-        return random.choice(self.member_types)
+        pick = random.choice(self.member_types)
+        if pick.is_nested():
+            return pick.pick_one_element_type()
+        else:
+            return pick
 
 ################################################################################
 # IdlUnionType
@@ -348,7 +352,11 @@ class IdlUnionType(IdlTypeBase):
         return True
 
     def pick_one_element_type(self):
-        return random.choice(self.member_types)
+        pick = random.choice(self.member_types)
+        if pick.is_nested():
+            return pick.pick_one_element_type()
+        else:
+            return pick
 
     @property
     def flattened_member_types(self):
@@ -398,7 +406,7 @@ class IdlUnionType(IdlTypeBase):
         return True
 
     def single_matching_member_type(self, predicate):
-        matching_types = filter(predicate, self.flattened_member_types)
+        matching_types = list(filter(predicate, self.flattened_member_types))
         if len(matching_types) > 1:
             raise ValueError('%s is ambiguous.' % self.name)
         return matching_types[0] if matching_types else None
@@ -456,6 +464,19 @@ class IdlUnionType(IdlTypeBase):
         for member_type in self.member_types:
             for idl_type in member_type.idl_types():
                 yield idl_type
+
+    @property
+    def member_names(self):
+        return [member.name for member in self.member_types]
+
+    def union(self, new_type):
+        if new_type.name not in self.member_names:
+            self.member_types.append(new_type)
+
+    def merge(self, other):
+        for member in other.member_types:
+            self.union(member)
+
 
 ################################################################################
 # IdlArrayOrSequenceType, IdlSequenceType, IdlFrozenArrayType
@@ -740,9 +761,9 @@ class IdlAnnotatedType(IdlTypeBase):
 
     @property
     def name(self):
-        annotation = ''.join(
-            (key + ('' if val is None else val))
-            for key, val in sorted(self.extended_attributes.items()))
+        # annotation = ''.join(
+        #     (key + ('' if val is None else val))
+        #     for key, val in sorted(self.extended_attributes.items()))
         #return self.inner_type.name + annotation
         return self.inner_type.name
 

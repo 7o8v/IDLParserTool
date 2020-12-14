@@ -26,7 +26,6 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-# pylint: disable=relative-import
 """Blink IDL Intermediate Representation (IR) classes.
 
 Classes are primarily constructors, which build an IdlDefinitions object
@@ -63,6 +62,9 @@ Design doc: http://www.chromium.org/developers/design-documents/idl-compiler
 import re
 import os
 import abc
+import random
+
+from typing import Dict
 
 from IDLParserTool.idl_types import IdlAnnotatedType
 from IDLParserTool.idl_types import IdlFrozenArrayType
@@ -103,7 +105,7 @@ class IdlDefinitions(object):
         self.includes = []
         self.interfaces = {}
         self.first_name = None
-        self.typedefs = {}
+        self.typedefs:Dict(IdlTypedef) = {}
         self.node = node
         
         node_class = node.GetClass()
@@ -456,6 +458,11 @@ class IdlEnum(object):
     def accept(self, visitor):
         visitor.visit_enumeration(self)
 
+    def get(self):
+        '''
+            Return a random enumration.
+        '''
+        return random.choice(self.values)
 
 ################################################################################
 # Typedefs
@@ -467,11 +474,19 @@ class IdlTypedef(object):
 
     def __init__(self, node):
         self.name = node.GetName()
-        self.idl_type = typedef_node_to_type(node)
+        # set all idl_type to IdlUnionType
+        parse_type = typedef_node_to_type(node)
+        if parse_type.is_union_type:
+            self.idl_type = parse_type
+        else:
+            self.idl_type = IdlUnionType([parse_type])
 
     def accept(self, visitor):
         visitor.visit_typedef(self)
 
+    def merge(self, other):
+        # merge another IdlTypedef, covert idl_type to IdlUnionType
+        self.idl_type.merge(other.idl_type)
 
 ################################################################################
 # Interfaces
@@ -1174,7 +1189,7 @@ def extended_attributes_to_constructors(extended_attributes):
 
     if 'NamedConstructor' in extended_attributes:
         # FIXME: support overloaded named constructors, and make homogeneous
-        name = 'NamedConstructor'
+        #name = 'NamedConstructor'
         call_node = extended_attributes['NamedConstructor']
         extended_attributes['NamedConstructor'] = call_node.GetName()
         children = call_node.GetChildren()
