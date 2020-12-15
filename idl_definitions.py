@@ -64,7 +64,7 @@ import os
 import abc
 import random
 
-from typing import Dict
+from typing import Dict, List
 
 from IDLParserTool.idl_types import IdlAnnotatedType
 from IDLParserTool.idl_types import IdlFrozenArrayType
@@ -355,56 +355,6 @@ class IdlDefinitions(object):
             self.callback_functions.update(other.callback_functions)
 
 
-
-################################################################################
-# Arguments
-################################################################################
-
-
-class IdlArgument(TypedObject):
-    def __init__(self, node=None):
-        self.extended_attributes = {}
-        self.idl_type = None
-        self.is_optional = False  # syntax: (optional T)
-        self.is_variadic = False  # syntax: (T...)
-        self.default_value = None
-
-        if not node:
-            return
-
-        self.is_optional = node.GetProperty('OPTIONAL')
-        self.name = node.GetName()
-
-        children = node.GetChildren()
-        for child in children:
-            child_class = child.GetClass()
-            if child_class == 'Type':
-                self.idl_type = type_node_to_type(child)
-            elif child_class == 'ExtAttributes':
-                self.extended_attributes = ext_attributes_node_to_extended_attributes(
-                    child)
-            elif child_class == 'Argument':
-                child_name = child.GetName()
-                if child_name != '...':
-                    raise ValueError(
-                        'Unrecognized Argument node; expected "...", got "%s"'
-                        % child_name)
-                self.is_variadic = bool(child.GetProperty('ELLIPSIS'))
-            elif child_class == 'Default':
-                self.default_value = default_node_to_idl_literal(child)
-            else:
-                raise ValueError('Unrecognized node class: %s' % child_class)
-
-    def accept(self, visitor):
-        visitor.visit_argument(self)
-
-    def __eq__(self, other):
-        return (
-            self.idl_type.name == other.idl_type.name
-            and self.name == other.name
-        )
-
-
 def arguments_node_to_arguments(node):
     # [Constructor] and [CustomConstructor] without arguments (the bare form)
     # have None instead of an arguments node, but have the same meaning as using
@@ -573,6 +523,145 @@ class IdlTypedef(object):
         # merge another IdlTypedef, covert idl_type to IdlUnionType
         self.idl_type.merge(other.idl_type)
 
+
+################################################################################
+# Arguments
+################################################################################
+
+
+class IdlArgument(TypedObject):
+    def __init__(self, node=None):
+        self.extended_attributes = {}
+        self.idl_type = None
+        self.is_optional = False  # syntax: (optional T)
+        self.is_variadic = False  # syntax: (T...)
+        self.default_value = None
+
+        if not node:
+            return
+
+        self.is_optional = node.GetProperty('OPTIONAL')
+        self.name = node.GetName()
+
+        children = node.GetChildren()
+        for child in children:
+            child_class = child.GetClass()
+            if child_class == 'Type':
+                self.idl_type = type_node_to_type(child)
+            elif child_class == 'ExtAttributes':
+                self.extended_attributes = ext_attributes_node_to_extended_attributes(
+                    child)
+            elif child_class == 'Argument':
+                child_name = child.GetName()
+                if child_name != '...':
+                    raise ValueError(
+                        'Unrecognized Argument node; expected "...", got "%s"'
+                        % child_name)
+                self.is_variadic = bool(child.GetProperty('ELLIPSIS'))
+            elif child_class == 'Default':
+                self.default_value = default_node_to_idl_literal(child)
+            else:
+                raise ValueError('Unrecognized node class: %s' % child_class)
+
+    def accept(self, visitor):
+        visitor.visit_argument(self)
+
+    def __eq__(self, other):
+        return (
+            self.idl_type.name == other.idl_type.name
+            and self.name == other.name
+        )
+
+################################################################################
+# Operations
+################################################################################
+
+
+class IdlOperation(TypedObject):
+    def __init__(self, node=None):
+        self.arguments:List[IdlArgument] = []
+        self.extended_attributes = {}
+        self.specials = []
+        self.is_constructor = False
+        self.idl_type = None
+        self.is_static = False
+        # In what interface the attribute is (originally) defined when the
+        # attribute is inherited from an ancestor interface.
+        self.defined_in = None
+
+        if not node:
+            return
+        self.node = node
+        if self.node.GetProperties().get('GETTER') is True:
+            self.is_getter = True
+        else:
+            self.is_getter = False
+        
+        if self.node.GetProperties().get('SETTER') is True:
+            self.is_setter = True
+        else:
+            self.is_setter = False
+
+        self.name = node.GetName()
+        self.is_clone = self.name == 'clone'
+
+        self.is_static = bool(node.GetProperty('STATIC'))
+        property_dictionary = node.GetProperties()
+        for special_keyword in SPECIAL_KEYWORD_LIST:
+            if special_keyword in property_dictionary:
+                self.specials.append(special_keyword.lower())
+
+        children = node.GetChildren()
+        for child in children:
+            child_class = child.GetClass()
+            if child_class == 'Arguments':
+                self.arguments = arguments_node_to_arguments(child)
+            elif child_class == 'Type':
+                self.idl_type = type_node_to_type(child)
+            elif child_class == 'ExtAttributes':
+                self.extended_attributes = ext_attributes_node_to_extended_attributes(
+                    child)
+            else:
+                raise ValueError('Unrecognized node class: %s' % child_class)
+
+        if 'Unforgeable' in self.extended_attributes and self.is_static:
+            raise ValueError(
+                '[Unforgeable] cannot appear on static operations.')
+
+    def __repr__(self):
+        return f"{self.idl_type.name} {self.name}({', '.join(arg.idl_type.name for arg in self.arguments)})"
+
+    def __str__(self):
+        return self.__repr__()
+
+    @classmethod
+    def constructor_from_arguments_node(cls, name, arguments_node):
+        constructor = cls()
+        constructor.name = name
+        constructor.arguments = arguments_node_to_arguments(arguments_node)
+        constructor.is_constructor = True
+        return constructor
+
+    def accept(self, visitor):
+        visitor.visit_operation(self)
+        for argument in self.arguments:
+            argument.accept(visitor)
+
+    def has_arg(self, arg_type:str):
+        for arg in self.arguments:
+            if arg.idl_type.is_nested() and arg.idl_type.has_type(arg_type):
+                return True
+            elif arg.idl_type.name == arg_type:
+                return True
+        return False
+
+    def has_ret(self, ret_type:str):
+        if self.idl_type.is_nested() and self.idl_type.has_type(ret_type):
+            return True
+        elif self.idl_type.name == ret_type:
+            return True
+        return False
+
 ################################################################################
 # Interfaces
 ################################################################################
@@ -632,6 +721,7 @@ class IdlInterface(object):
                         attr.idl_type)
                 if attr.idl_type.is_integer_type and attr.name == 'length':
                     has_integer_typed_length = True
+                attr.defined_in = self
                 self.attributes.append(attr)
             elif child_class == 'Const':
                 self.constants.append(IdlConstant(child))
@@ -649,6 +739,7 @@ class IdlInterface(object):
                         has_indexed_property_getter = True
                     elif str(op.arguments[0].idl_type) == 'DOMString':
                         self.has_named_property_getter = True
+                op.defined_in = self
                 self.operations.append(op)
             elif child_class == 'Constructor':
                 operation = constructor_operation_from_node(child)
@@ -911,75 +1002,6 @@ def default_node_to_idl_literal(node):
     if idl_type == 'dictionary':
         return IdlLiteral(idl_type, value)
     raise ValueError('Unrecognized default value type: %s' % idl_type)
-
-
-################################################################################
-# Operations
-################################################################################
-
-
-class IdlOperation(TypedObject):
-    def __init__(self, node=None):
-        self.arguments = []
-        self.extended_attributes = {}
-        self.specials = []
-        self.is_constructor = False
-        self.idl_type = None
-        self.is_static = False
-        # In what interface the attribute is (originally) defined when the
-        # attribute is inherited from an ancestor interface.
-        self.defined_in = None
-
-        if not node:
-            return
-        self.node = node
-        if self.node.GetProperties().get('GETTER') is True:
-            self.is_getter = True
-        else:
-            self.is_getter = False
-        
-        if self.node.GetProperties().get('SETTER') is True:
-            self.is_setter = True
-        else:
-            self.is_setter = False
-
-        self.name = node.GetName()
-
-        self.is_static = bool(node.GetProperty('STATIC'))
-        property_dictionary = node.GetProperties()
-        for special_keyword in SPECIAL_KEYWORD_LIST:
-            if special_keyword in property_dictionary:
-                self.specials.append(special_keyword.lower())
-
-        children = node.GetChildren()
-        for child in children:
-            child_class = child.GetClass()
-            if child_class == 'Arguments':
-                self.arguments = arguments_node_to_arguments(child)
-            elif child_class == 'Type':
-                self.idl_type = type_node_to_type(child)
-            elif child_class == 'ExtAttributes':
-                self.extended_attributes = ext_attributes_node_to_extended_attributes(
-                    child)
-            else:
-                raise ValueError('Unrecognized node class: %s' % child_class)
-
-        if 'Unforgeable' in self.extended_attributes and self.is_static:
-            raise ValueError(
-                '[Unforgeable] cannot appear on static operations.')
-
-    @classmethod
-    def constructor_from_arguments_node(cls, name, arguments_node):
-        constructor = cls()
-        constructor.name = name
-        constructor.arguments = arguments_node_to_arguments(arguments_node)
-        constructor.is_constructor = True
-        return constructor
-
-    def accept(self, visitor):
-        visitor.visit_operation(self)
-        for argument in self.arguments:
-            argument.accept(visitor)
 
 
 ################################################################################

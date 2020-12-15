@@ -135,6 +135,8 @@ class IdlTypeBase(object):
     def is_nested(self) -> bool:
         return False
 
+    def has_type(self) -> bool:
+        return False
 
 ################################################################################
 # IdlType
@@ -316,6 +318,16 @@ class IdlPromiseType(IdlTypeBase):
             return pick.pick_one_element_type()
         else:
             return pick
+    
+    def has_type(self, desired_type:str):
+        for member in self.member_types:
+            if member.is_nested():
+                if member.has_type(desired_type):
+                    return True
+            else:
+                if member.name == desired_type:
+                    return True
+        return False
 
 ################################################################################
 # IdlUnionType
@@ -350,6 +362,16 @@ class IdlUnionType(IdlTypeBase):
 
     def is_nested(self):
         return True
+
+    def has_type(self, desired_type:str):
+        for member in self.member_types:
+            if member.is_nested():
+                if member.has_type(desired_type):
+                    return True
+            else:
+                if member.name == desired_type:
+                    return True
+        return False
 
     def pick_one_element_type(self):
         pick = random.choice(self.member_types)
@@ -505,6 +527,10 @@ class IdlArrayOrSequenceType(IdlTypeBase):
 
     def is_nested(self):
         return True
+
+    def has_type(self, desired_type:str):
+        if self.element_type.name == desired_type:
+            return True
 
     def pick_one_element_type(self):
         return self.element_type
