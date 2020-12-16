@@ -141,7 +141,12 @@ class IdlTypeBase(object):
     def is_promise(self) -> bool:
         return False
 
+    @property
     def is_array_or_sequence_type(self) -> bool:
+        return False
+
+    @property
+    def is_union(self) -> bool:
         return False
 
 ################################################################################
@@ -323,10 +328,7 @@ class IdlPromiseType(IdlTypeBase):
 
     def pick_one_element_type(self):
         pick = random.choice(self.member_types)
-        if pick.is_nested():
-            return pick.pick_one_element_type()
-        else:
-            return pick
+        return pick
     
     def has_type(self, desired_type:str):
         for member in self.member_types:
@@ -384,10 +386,7 @@ class IdlUnionType(IdlTypeBase):
 
     def pick_one_element_type(self):
         pick = random.choice(self.member_types)
-        if pick.is_nested():
-            return pick.pick_one_element_type()
-        else:
-            return pick
+        return pick
 
     @property
     def flattened_member_types(self):
