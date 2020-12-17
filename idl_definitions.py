@@ -629,7 +629,7 @@ class IdlOperation(TypedObject):
                 '[Unforgeable] cannot appear on static operations.')
 
     def __repr__(self):
-        return f"{self.idl_type.name} {self.name}({', '.join(arg.idl_type.name for arg in self.arguments)})"
+        return f"{self.idl_type.name} {self.defined_in.name}.{self.name}({', '.join(arg.idl_type.name for arg in self.arguments)})"
 
     def __str__(self):
         return self.__repr__()
@@ -671,6 +671,7 @@ class IdlInterface(object):
     def __init__(self, node):
         self.node = node
         self.attributes = []
+        self.attributes_type_dict = {}
         self.constants = []
         self.constructors = []
         self.custom_constructors = []
@@ -723,6 +724,9 @@ class IdlInterface(object):
                     has_integer_typed_length = True
                 attr.defined_in = self
                 self.attributes.append(attr)
+                if not self.attributes_type_dict.get(attr.idl_type.name):
+                    self.attributes_type_dict[attr.idl_type.name] = []
+                self.attributes_type_dict[attr.idl_type.name].append(attr)
             elif child_class == 'Const':
                 self.constants.append(IdlConstant(child))
             elif child_class == 'ExtAttributes':
@@ -908,6 +912,11 @@ class IdlAttribute(TypedObject):
     def accept(self, visitor):
         visitor.visit_attribute(self)
 
+    def __repr__(self):
+        return f"({self.idl_type.name}){self.defined_in.name}.{self.name}"
+
+    def __str__(self):
+        return self.__repr__()
 
 ################################################################################
 # Constants
