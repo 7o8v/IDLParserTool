@@ -689,6 +689,7 @@ class IdlInterface(object):
         self.partial_interfaces = []
 
         self.is_callback = bool(node.GetProperty('CALLBACK'))
+        self.event_handler = None
         self.is_partial = bool(node.GetProperty('PARTIAL'))
         self.is_mixin = bool(node.GetProperty('MIXIN'))
         self.name = node.GetName()
@@ -743,6 +744,11 @@ class IdlInterface(object):
                         has_indexed_property_getter = True
                     elif str(op.arguments[0].idl_type) == 'DOMString':
                         self.has_named_property_getter = True
+                # find handleEvent operation
+                if op.name == 'handleEvent':
+                    if self.event_handler:
+                        raise Exception(f"Duplicate handleEvent for {self.name}")
+                    self.event_handler = op
                 op.defined_in = self
                 self.operations.append(op)
             elif child_class == 'Constructor':
