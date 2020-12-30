@@ -132,12 +132,14 @@ class IdlTypeBase(object):
         including itself."""
         yield self
 
+    @property
     def is_nested(self) -> bool:
         return False
 
     def has_type(self) -> bool:
         return False
 
+    @property
     def is_promise(self) -> bool:
         return False
 
@@ -320,9 +322,11 @@ class IdlPromiseType(IdlTypeBase):
         all_types = ', '.join(member_type.name for member_type in self.member_types)
         return f"Promise({all_types})"
 
+    @property
     def is_nested(self):
         return True
 
+    @property
     def is_promise(self):
         return True
 
@@ -332,7 +336,7 @@ class IdlPromiseType(IdlTypeBase):
     
     def has_type(self, desired_type:str):
         for member in self.member_types:
-            if member.is_nested():
+            if member.is_nested:
                 if member.has_type(desired_type):
                     return True
             else:
@@ -371,12 +375,13 @@ class IdlUnionType(IdlTypeBase):
     def __setstate__(self, state):
         self.member_types = state['member_types']
 
+    @property
     def is_nested(self):
         return True
 
     def has_type(self, desired_type:str):
         for member in self.member_types:
-            if member.is_nested():
+            if member.is_nested:
                 if member.has_type(desired_type):
                     return True
             else:
@@ -537,6 +542,7 @@ class IdlArrayOrSequenceType(IdlTypeBase):
         self.element_type = self.element_type.resolve_typedefs(typedefs)
         return self
 
+    @property
     def is_nested(self):
         return True
 
@@ -585,6 +591,7 @@ class IdlSequenceType(IdlArrayOrSequenceType):
         #return self.element_type.name + 'Sequence'
         return f"Sequence({self.element_type.name})"
 
+    @property
     def is_nested(self):
         return True
 
@@ -608,6 +615,7 @@ class IdlFrozenArrayType(IdlArrayOrSequenceType):
         #return self.element_type.name + 'Array'
         return f"Array({self.element_type.name})"
 
+    @property
     def is_nested(self):
         return True
 

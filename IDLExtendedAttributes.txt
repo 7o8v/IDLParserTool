@@ -121,3 +121,7 @@ LegacyUnforgeable
 LegacyLenientThis
 LegacyLenientSetter
 NoAllocDirectCall
+
+# self defined
+NumberRange=*
+DefaultConstrcutorParamters=*

@@ -453,6 +453,7 @@ class IdlDictionaryMember(TypedObject):
         self.idl_type = None
         self.is_required = bool(node.GetProperty('REQUIRED'))
         self.name = node.GetName()
+        
         for child in node.GetChildren():
             child_class = child.GetClass()
             if child_class == 'Type':
@@ -634,6 +635,24 @@ class IdlOperation(TypedObject):
     def __str__(self):
         return self.__repr__()
 
+    def __eq__(self, other):
+        '''
+            * name
+            * number of arguments
+            * argument
+        '''
+        if self.name != other.name:
+            return False
+        
+        if len(self.arguments) != len(other.arguments):
+            return False
+        
+        for i in range(0, len(self.arguments)):
+            if self.arguments[i] != other.arguments[i]:
+                return False
+        
+        return True
+
     @classmethod
     def constructor_from_arguments_node(cls, name, arguments_node):
         constructor = cls()
@@ -649,14 +668,14 @@ class IdlOperation(TypedObject):
 
     def has_arg(self, arg_type:str):
         for arg in self.arguments:
-            if arg.idl_type.is_nested() and arg.idl_type.has_type(arg_type):
+            if arg.idl_type.is_nested and arg.idl_type.has_type(arg_type):
                 return True
             elif arg.idl_type.name == arg_type:
                 return True
         return False
 
     def has_ret(self, ret_type:str):
-        if self.idl_type.is_nested() and self.idl_type.has_type(ret_type):
+        if self.idl_type.is_nested and self.idl_type.has_type(ret_type):
             return True
         elif self.idl_type.name == ret_type:
             return True
@@ -873,6 +892,34 @@ class IdlInterface(object):
         if self.stringifier is None:
             self.stringifier = other.stringifier
 
+    def inherite(self, parent):
+        for attr in parent.attributes:
+            if attr not in self.attributes:
+                self.attributes.append(attr)
+        
+        for op in parent.operations:
+            overwrite = False
+            for exist_op in self.operations:
+                if op.name == exist_op.name:
+                    overwrite = True
+                    break
+            if not overwrite:
+                self.operations.append(op)
+        
+        self.constants.extend(parent.constants)
+        for k, v in parent.extended_attributes.items():
+            if not self.extended_attributes.get(k):
+                self.extended_attributes[k] = v
+            elif k == 'Exposed':
+                self.extended_attributes[k] = list(set(
+                    self.extended_attributes[k] + v
+                ))
+            elif v != self.extended_attributes[k]:
+                pass
+
+        if self.stringifier is None:
+            self.stringifier = parent.stringifier
+
     def operations_to_dict(self):
         for op in self.operations:
             ops = self.operations_dict.get(op.name)
@@ -923,6 +970,17 @@ class IdlAttribute(TypedObject):
 
     def __str__(self):
         return self.__repr__()
+
+    def __eq__(self, other):
+        if self.idl_type.name != other.idl_type.name:
+            return False
+        if self.name != other.name:
+            return False
+        
+        # if self.defined_in and other.defined_in:
+        #     if self.defined_in.name != other.defined_in.name:
+        #         return False
+        return True
 
 ################################################################################
 # Constants

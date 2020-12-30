@@ -1,6 +1,24 @@
 ### IDLParserTool
 所有代码都是从Chromium项目中copy出来的，做了一点小改动封装成了一个module。
 
+#### 引入扩展属性
+* NumberRange(min, max)
+
+    针对数值型变量设定范围
+
+* DefaultConstrcutorParamters(default_value)
+
+    针对接口型变量(比如`Uint8Array`)，传递默认的构造函数参数，只有在构造函数存在时生效。
+
+    其中`default_value`为字符串，会直接拼接到生成的JavaScript代码中。
+
+    例：
+    ```
+        [DefaultConstrcutorParamters="[1, 0, 1]"] required Uint8Array publicExponent
+        
+    =>  publicExponent = new Uint8Array([1, 0, 1]);
+    ```
+
 #### Example
 
 ```python
