@@ -453,6 +453,8 @@ class IdlDictionaryMember(TypedObject):
         self.idl_type = None
         self.is_required = bool(node.GetProperty('REQUIRED'))
         self.name = node.GetName()
+        # ExtendAttr: BooleanOnly
+        self.value_only = None
         
         for child in node.GetChildren():
             child_class = child.GetClass()
@@ -465,6 +467,15 @@ class IdlDictionaryMember(TypedObject):
                     ext_attributes_node_to_extended_attributes(child))
             else:
                 raise ValueError('Unrecognized node class: %s' % child_class)
+
+        if self.extended_attributes.get('BooleanOnly'):
+            if self.extended_attributes.get('BooleanOnly') == 'true':
+                self.value_only = 'true'
+            elif self.extended_attributes.get('BooleanOnly') == 'false':
+                self.value_only = 'false'
+            else:
+                raise Exception(f"Not support BooleanOnly value in {self.name}.")
+        
 
     def accept(self, visitor):
         visitor.visit_dictionary_member(self)
