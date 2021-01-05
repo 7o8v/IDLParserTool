@@ -725,6 +725,8 @@ class IdlInterface(object):
         self.name = node.GetName()
         self.idl_type = IdlType(self.name)
 
+        self.eventhandlers = []
+
         has_indexed_property_getter = False
         has_integer_typed_length = False
 
@@ -758,6 +760,8 @@ class IdlInterface(object):
                 if not self.attributes_type_dict.get(attr.idl_type.name):
                     self.attributes_type_dict[attr.idl_type.name] = []
                 self.attributes_type_dict[attr.idl_type.name].append(attr)
+                if attr.is_eventhandler:
+                    self.eventhandlers.append(attr)
             elif child_class == 'Const':
                 self.constants.append(IdlConstant(child))
             elif child_class == 'ExtAttributes':
@@ -885,6 +889,8 @@ class IdlInterface(object):
         self.attributes.extend(other.attributes)
         self.constants.extend(other.constants)
         self.operations.extend(other.operations)
+        self.constructors.extend(other.constructors)
+        self.eventhandlers.extend(other.eventhandlers)
         
         for k, v in other.extended_attributes.items():
             if not self.extended_attributes.get(k):
@@ -904,10 +910,12 @@ class IdlInterface(object):
             self.stringifier = other.stringifier
 
     def inherite(self, parent):
+        self.eventhandlers.extend(parent.eventhandlers)
         for attr in parent.attributes:
             if attr not in self.attributes:
                 self.attributes.append(attr)
         
+        # 支持重写父类方法
         for op in parent.operations:
             overwrite = False
             for exist_op in self.operations:
@@ -972,6 +980,15 @@ class IdlAttribute(TypedObject):
         if 'Unforgeable' in self.extended_attributes and self.is_static:
             raise ValueError(
                 '[Unforgeable] cannot appear on static attributes.')
+        
+        if 'EventHandler' in self.extended_attributes:
+            self.is_eventhandler = True
+            if 'EventType' in self.extended_attributes:
+                self.event_type = self.extended_attributes['EventType']
+            else:
+                self.event_type = ''
+        else:
+            self.is_eventhandler = False
 
     def accept(self, visitor):
         visitor.visit_attribute(self)

@@ -126,3 +126,5 @@ NoAllocDirectCall
 NumberRange=*
 DefaultConstrcutorParamters=*
 BooleanOnly=*
+EventHandler
+EventType=*
