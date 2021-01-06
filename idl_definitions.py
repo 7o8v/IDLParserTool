@@ -601,6 +601,10 @@ class IdlOperation(TypedObject):
         # attribute is inherited from an ancestor interface.
         self.defined_in = None
 
+        # wait表示当前operation是否在等待调用条件满足
+        self.wait = False
+        self.call_after = ''
+
         if not node:
             return
         self.node = node
@@ -639,6 +643,9 @@ class IdlOperation(TypedObject):
         if 'Unforgeable' in self.extended_attributes and self.is_static:
             raise ValueError(
                 '[Unforgeable] cannot appear on static operations.')
+
+        if 'CallAfter' in self.extended_attributes:
+            self.call_after = self.extended_attributes['CallAfter']
 
     def __repr__(self):
         return f"{self.idl_type.name} {self.defined_in.name}.{self.name}({', '.join(arg.idl_type.name for arg in self.arguments)})"
@@ -785,6 +792,7 @@ class IdlInterface(object):
                     self.event_handler = op
                 op.defined_in = self
                 self.operations.append(op)
+
             elif child_class == 'Constructor':
                 operation = constructor_operation_from_node(child)
                 if operation.is_custom:
