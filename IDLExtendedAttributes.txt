@@ -128,3 +128,4 @@ DefaultConstrcutorParamters=*
 BooleanOnly=*
 EventHandler
 EventType=*
+CallAfter=*
