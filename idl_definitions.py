@@ -476,6 +476,8 @@ class IdlDictionaryMember(TypedObject):
             else:
                 raise Exception(f"Not support BooleanOnly value in {self.name}.")
         
+        self.exclude_id = self.extended_attributes.get('Exclude', '')
+        
 
     def accept(self, visitor):
         visitor.visit_dictionary_member(self)
@@ -574,6 +576,15 @@ class IdlArgument(TypedObject):
                 self.default_value = default_node_to_idl_literal(child)
             else:
                 raise ValueError('Unrecognized node class: %s' % child_class)
+        
+        # 这个属性代表该参数来源只能是方法所在接口
+        # 比如：存在一个RTCPeerConnection变量pc1，pc1.setLocalDescription参数来源只能是pc1.createOffer
+        #      或者pc1.createAnswer
+        self.from_this = 'FromThis' in self.extended_attributes
+        # 这个属性代表该参数来源只能是方法所在的其他接口
+        # 比如：存在两个RTCPeerConnection变量pc1和pc2，pc1.setRemoteDescription参数来源只能是pc2.createOffer
+        #      或者pc2.createAnswer
+        self.from_other = 'FromOther' in self.extended_attributes
 
     def accept(self, visitor):
         visitor.visit_argument(self)
@@ -603,7 +614,6 @@ class IdlOperation(TypedObject):
 
         # wait表示当前operation是否在等待调用条件满足
         self.wait = False
-        self.call_after = ''
 
         if not node:
             return
@@ -645,7 +655,13 @@ class IdlOperation(TypedObject):
                 '[Unforgeable] cannot appear on static operations.')
 
         if 'CallAfter' in self.extended_attributes:
-            self.call_after = self.extended_attributes['CallAfter']
+            raw_text = self.extended_attributes['CallAfter']
+            self.call_after = raw_text[1:-1].replace(' ', '').split(',')
+        else:
+            self.call_after = []
+
+        # 调用几率，范围设定为[0, 10)，不支持浮点数
+        self.weight = int(self.extended_attributes.get('Weight', '10'))
 
     def __repr__(self):
         return f"{self.idl_type.name} {self.defined_in.name}.{self.name}({', '.join(arg.idl_type.name for arg in self.arguments)})"

@@ -299,6 +299,8 @@ class IdlPromiseType(IdlTypeBase):
     def __init__(self, member_types):
         super(IdlPromiseType, self).__init__()
         self.member_types = member_types
+        self.under_type = member_types[0]
+        assert len(member_types) == 1
 
     def __str__(self):
         return f"Promise({', '.join(str(member_type) for member_type in self.member_types)})"
