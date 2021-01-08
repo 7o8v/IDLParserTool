@@ -611,7 +611,7 @@ class IdlOperation(TypedObject):
         # In what interface the attribute is (originally) defined when the
         # attribute is inherited from an ancestor interface.
         self.defined_in = None
-
+        self.call_after = []
         # wait表示当前operation是否在等待调用条件满足
         self.wait = False
 
@@ -657,8 +657,6 @@ class IdlOperation(TypedObject):
         if 'CallAfter' in self.extended_attributes:
             raw_text = self.extended_attributes['CallAfter']
             self.call_after = raw_text[1:-1].replace(' ', '').split(',')
-        else:
-            self.call_after = []
 
         # 调用几率，范围设定为[0, 10)，不支持浮点数
         self.weight = int(self.extended_attributes.get('Weight', '10'))
