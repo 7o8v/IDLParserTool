@@ -580,11 +580,15 @@ class IdlArgument(TypedObject):
         # 这个属性代表该参数来源只能是方法所在接口
         # 比如：存在一个RTCPeerConnection变量pc1，pc1.setLocalDescription参数来源只能是pc1.createOffer
         #      或者pc1.createAnswer
-        self.from_this = 'FromThis' in self.extended_attributes
+        if 'FromThis' in self.extended_attributes:
+            self.arg_from = 'this'
         # 这个属性代表该参数来源只能是方法所在的其他接口
         # 比如：存在两个RTCPeerConnection变量pc1和pc2，pc1.setRemoteDescription参数来源只能是pc2.createOffer
         #      或者pc2.createAnswer
-        self.from_other = 'FromOther' in self.extended_attributes
+        elif 'FromOther' in self.extended_attributes:
+            self.arg_from = 'other'
+        else:
+            self.arg_from = ''
 
     def accept(self, visitor):
         visitor.visit_argument(self)
