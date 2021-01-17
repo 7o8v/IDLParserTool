@@ -417,6 +417,7 @@ class IdlDictionary(object):
         self.extended_attributes = {}
         self.is_partial = bool(node.GetProperty('PARTIAL'))
         self.name = node.GetName()
+        self.idl_type = IdlType(self.name)
         self.members = []
         self.parent = None
         for child in node.GetChildren():
@@ -430,6 +431,7 @@ class IdlDictionary(object):
                     ext_attributes_node_to_extended_attributes(child))
             else:
                 raise ValueError('Unrecognized node class: %s' % child_class)
+        
 
     def accept(self, visitor):
         visitor.visit_dictionary(self)

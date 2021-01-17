@@ -299,7 +299,7 @@ class IdlPromiseType(IdlTypeBase):
     def __init__(self, member_types):
         super(IdlPromiseType, self).__init__()
         self.member_types = member_types
-        self.under_type = member_types[0]
+        self.nested_type = member_types[0]
         assert len(member_types) == 1
 
     def __str__(self):
