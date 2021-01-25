@@ -121,6 +121,7 @@ LegacyUnforgeable
 LegacyLenientThis
 LegacyLenientSetter
 NoAllocDirectCall
+LegacyNamespace=*
 
 # self defined
 NumberRange=*
