@@ -17,6 +17,7 @@ IdlTypes are picklable because we store them in interfaces_info.
 """
 import random
 
+from functools import cache
 from collections import defaultdict
 
 ################################################################################
@@ -255,6 +256,7 @@ class IdlType(IdlTypeBase):
         return self.name in STRING_TYPES
 
     @property
+    @cache
     def name(self):
         """Return type name
 
