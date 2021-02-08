@@ -917,7 +917,7 @@ class IdlInterface(object):
         self.attributes.extend(other.attributes)
         self.constants.extend(other.constants)
         for op in other.operations:
-            op.defined_in = self.name
+            op.defined_in = self
             self.operations.append(op)
         self.constructors.extend(other.constructors)
         self.eventhandlers.extend(other.eventhandlers)
@@ -953,7 +953,7 @@ class IdlInterface(object):
                     overwrite = True
                     break
             if not overwrite:
-                op.defined_in = self.name
+                op.defined_in = self
                 self.operations.append(op)
         
         self.constants.extend(parent.constants)
