@@ -30,7 +30,7 @@
 # pylint: disable=C0301
 
 from __future__ import print_function
-
+import traceback
 import os.path
 import sys
 import time
@@ -1239,7 +1239,6 @@ class IDLParser(object):
     line = self.BuildAttribute('LINENO', self._last_error_lineno)
     pos = self.BuildAttribute('POSITION', self._last_error_pos)
     prod = self.BuildAttribute('PROD', prod)
-
     node = self.BuildProduction('Error', p, 1,
                                 ListFromConcat(name, line, pos, prod))
     if not self.mute_error:

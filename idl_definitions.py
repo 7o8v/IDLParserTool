@@ -59,12 +59,14 @@ IdlArgument is 'picklable', as it is stored in interfaces_info.
 Design doc: http://www.chromium.org/developers/design-documents/idl-compiler
 """
 
+from __future__ import annotations
+
 import re
 import os
 import abc
 import random
 
-from typing import Dict, List
+from typing import Dict, List, Tuple, Union
 
 from IDLParserTool.idl_types import IdlAnnotatedType
 from IDLParserTool.idl_types import IdlFrozenArrayType
@@ -75,7 +77,16 @@ from IDLParserTool.idl_types import IdlType
 from IDLParserTool.idl_types import IdlUnionType
 from IDLParserTool.idl_types import IdlPromiseType
 
+from utils import NumberRangeEnd, NumberRange
+
 SPECIAL_KEYWORD_LIST = ['GETTER', 'SETTER', 'DELETER']
+
+def ProcessNumberEnum(idl_type:IdlType, raw_value):
+    match = re.match(r"\([\d,\s]+\)", raw_value)
+    assert match
+    str_values = re.findall(r"(\d+),?\s?", raw_value)
+    caster = int if idl_type.is_integer_type else float
+    return [caster(i) for i in str_values]
 
 ################################################################################
 # TypedObject
@@ -418,7 +429,7 @@ class IdlDictionary(object):
         self.is_partial = bool(node.GetProperty('PARTIAL'))
         self.name = node.GetName()
         self.idl_type = IdlType(self.name)
-        self.members = []
+        self.members:list[IdlDictionaryMember] = []
         self.parent = None
         for child in node.GetChildren():
             child_class = child.GetClass()
@@ -479,7 +490,21 @@ class IdlDictionaryMember(TypedObject):
                 raise Exception(f"Not support BooleanOnly value in {self.name}.")
         
         self.exclude_id = self.extended_attributes.get('Exclude', '')
+
+        # 当成员类型为数字类型时该扩展属性有效
+        self.number_range:NumberRange = None
+        if 'NumberRange' in self.extended_attributes and self.idl_type.is_numeric_type:
+            raw_value = self.extended_attributes['NumberRange']
+            if self.idl_type.is_integer_type:
+                self.number_range = NumberRange.from_string(raw_value, is_float=False)
+            elif self.idl_type.is_floating_type:
+                self.number_range = NumberRange.from_string(raw_value, is_float=True)
+            assert self.number_range
         
+        self.number_enum:list = []
+        if 'NumberEnum' in self.extended_attributes:
+            raw_value = self.extended_attributes['NumberEnum']
+            self.number_enum = ProcessNumberEnum(self.idl_type, raw_value)
 
     def accept(self, visitor):
         visitor.visit_dictionary_member(self)
@@ -498,6 +523,7 @@ class IdlDictionaryMember(TypedObject):
 class IdlEnum(object):
     def __init__(self, node):
         self.name = node.GetName()
+        self.idl_type = IdlType(self.name)
         self.values = []
         for child in node.GetChildren():
             self.values.append(child.GetName())
@@ -518,8 +544,6 @@ class IdlEnum(object):
 ################################################################################
 # Typedefs
 ################################################################################
-
-
 class IdlTypedef(object):
     idl_type_attributes = ('idl_type', )
 
@@ -539,16 +563,13 @@ class IdlTypedef(object):
         # merge another IdlTypedef, covert idl_type to IdlUnionType
         self.idl_type.merge(other.idl_type)
 
-
 ################################################################################
 # Arguments
 ################################################################################
-
-
 class IdlArgument(TypedObject):
     def __init__(self, node=None):
         self.extended_attributes = {}
-        self.idl_type = None
+        self.idl_type:IdlType = None
         self.is_optional = False  # syntax: (optional T)
         self.is_variadic = False  # syntax: (T...)
         self.default_value = None
@@ -592,6 +613,24 @@ class IdlArgument(TypedObject):
         else:
             self.arg_from = ''
 
+        # 当参数类型为数字类型时该扩展属性有效
+        self.number_range:tuple = tuple()
+        # 考虑开闭区间
+        if 'NumberRange' in self.extended_attributes and self.idl_type.is_numeric_type:
+            raw_value = self.extended_attributes['NumberRange']
+            if self.idl_type.is_integer_type:
+                self.number_range = NumberRange.from_string(raw_value, is_float=False)
+            elif self.idl_type.is_floating_type:
+                self.number_range = NumberRange.from_string(raw_value, is_float=True)
+            assert self.number_range
+        
+        # 数字类型的固定枚举值，如果存在，那么在生成数字时会优先使用枚举值
+        self.number_enum:list = []
+        if 'NumberEnum' in self.extended_attributes:
+            raw_value = self.extended_attributes['NumberEnum']
+            self.number_enum = ProcessNumberEnum(self.idl_type, raw_value)
+
+
     def accept(self, visitor):
         visitor.visit_argument(self)
 
@@ -600,12 +639,13 @@ class IdlArgument(TypedObject):
             self.idl_type.name == other.idl_type.name
             and self.name == other.name
         )
+    
+    def __repr__(self):
+        return f"{self.idl_type.name} {self.name}"
 
 ################################################################################
 # Operations
 ################################################################################
-
-
 class IdlOperation(TypedObject):
     def __init__(self, node=None):
         self.arguments:List[IdlArgument] = []
@@ -616,7 +656,7 @@ class IdlOperation(TypedObject):
         self.is_static = False
         # In what interface the attribute is (originally) defined when the
         # attribute is inherited from an ancestor interface.
-        self.defined_in = None
+        self.defined_in:IdlInterface = None
         self.call_after = []
         # wait表示当前operation是否在等待调用条件满足
         self.wait = False
@@ -673,6 +713,9 @@ class IdlOperation(TypedObject):
     def __str__(self):
         return self.__repr__()
 
+    def __hash__(self):
+        return hash(str([self.name, self.defined_in.name, self.arguments]))
+
     def __eq__(self, other):
         '''
             * name
@@ -722,47 +765,48 @@ class IdlOperation(TypedObject):
 ################################################################################
 # Interfaces
 ################################################################################
-
-
 class IdlInterface(object):
     def __init__(self, node):
-        self.node = node
-        self.attributes = []
-        self.attributes_type_dict = {}
-        self.constants = []
-        self.constructors = []
-        self.custom_constructors = []
-        self.extended_attributes = {}
-        self.operations = []
-        self.operations_dict = {}
-        self.parent = None
-        self.stringifier = None
-        self.iterable = None
-        self.has_indexed_elements = False
-        self.has_named_property_getter = False
-        self.maplike = None
-        self.setlike = None
-        self.original_interface = None
-        self.partial_interfaces = []
+        self.node                           = node
+        self.attributes:list[IdlAttribute]  = []
+        self.attributes_dict:dict[str, IdlAttribute] = {}
+        self.attributes_type_dict:dict[str, IdlAttribute] = {}
+        self.constants                      = []
+        self.constructors                   = []
+        self.custom_constructors            = []
+        self.extended_attributes            = {}
+        self.operations:list[IdlOperation]  = []
+        self.operations_dict                = {}
 
-        self.is_callback = bool(node.GetProperty('CALLBACK'))
-        self.event_handler = None
-        self.is_partial = bool(node.GetProperty('PARTIAL'))
-        self.is_mixin = bool(node.GetProperty('MIXIN'))
-        self.name = node.GetName()
-        self.idl_type = IdlType(self.name)
+        # 处理AST时parent为str，经过IdlContext处理之后会修正为IdlInterface
+        self.parent:Union[str, IdlInterface] = None
+        self.stringifier                    = None
+        self.iterable                       = None
+        self.has_indexed_elements           = False
+        self.has_named_property_getter      = False
+        self.maplike                        = None
+        self.setlike                        = None
+        self.original_interface             = None
+        self.partial_interfaces             = []
 
-        self.eventhandlers = []
+        self.is_callback                    = bool(node.GetProperty('CALLBACK'))
+        self.event_handler                  = None
+        self.is_partial                     = bool(node.GetProperty('PARTIAL'))
+        self.is_mixin                       = bool(node.GetProperty('MIXIN'))
+        self.name:str                           = node.GetName()
+        self.idl_type:IdlType                       = IdlType(self.name)
 
-        has_indexed_property_getter = False
-        has_integer_typed_length = False
+        self.eventhandlers                  = []
+
+        has_indexed_property_getter         = False
+        has_integer_typed_length            = False
 
         # These are used to support both constructor operations and old style
         # [Constructor] extended attributes. Ideally we should do refactoring
         # for constructor code generation but we will use a new code generator
         # soon so this kind of workaround should be fine.
-        constructor_operations = []
-        custom_constructor_operations = []
+        constructor_operations              = []
+        custom_constructor_operations       = []
         constructor_operations_extended_attributes = {}
 
         def is_invalid_attribute_type(idl_type):
@@ -786,6 +830,7 @@ class IdlInterface(object):
                 self.attributes.append(attr)
                 if not self.attributes_type_dict.get(attr.idl_type.name):
                     self.attributes_type_dict[attr.idl_type.name] = []
+                self.attributes_dict[attr.name] = attr # 属性不可能重名
                 self.attributes_type_dict[attr.idl_type.name].append(attr)
                 if attr.is_eventhandler:
                     self.eventhandlers.append(attr)
@@ -912,12 +957,33 @@ class IdlInterface(object):
         elif self.stringifier.operation:
             self.operations.append(self.stringifier.operation)
 
-    def merge(self, other):
+    def has_attr(self, attr_name:str):
+        return attr_name in self.attributes_dict
+
+    def has_type_attr(self, attr_type:str):
+        return attr_type in self.attributes_type_dict
+
+    def update_attribute(self, attr:IdlAttribute):
+        self.attributes.append(attr)
+        self.attributes_dict[attr.name] = attr
+        if not self.attributes_type_dict.get(attr.idl_type.name):
+            self.attributes_type_dict[attr.idl_type.name] = []
+        self.attributes_type_dict[attr.idl_type.name].append(attr)
+
+    def merge(self, other:IdlInterface):
         """Merge in another interface's members (e.g., partial interface)"""
-        self.attributes.extend(other.attributes)
+        for attr in other.attributes:
+            self.update_attribute(attr)
+        # self.attributes.extend(other.attributes)
+        # self.attributes_dict.update(other.attributes_dict)
+        # for k,v in other.attributes_type_dict.items():
+        #     if not self.attributes_type_dict.get(k):
+        #         self.attributes_type_dict[k] = []
+        #     self.attributes_type_dict[k].extend(v)
+
         self.constants.extend(other.constants)
         for op in other.operations:
-            op.defined_in = self
+            # op.defined_in = self # TODO: 应该在defined_in中记录下父类的信息
             self.operations.append(op)
         self.constructors.extend(other.constructors)
         self.eventhandlers.extend(other.eventhandlers)
@@ -939,11 +1005,14 @@ class IdlInterface(object):
         if self.stringifier is None:
             self.stringifier = other.stringifier
 
-    def inherite(self, parent):
+    def inherite(self, parent:IdlInterface):
         self.eventhandlers.extend(parent.eventhandlers)
+
         for attr in parent.attributes:
-            if attr not in self.attributes:
-                self.attributes.append(attr)
+            # 不继承重名的属性
+            if self.has_attr(attr.name):
+                continue
+            self.update_attribute(attr)
         
         # 支持重写父类方法
         for op in parent.operations:
@@ -953,7 +1022,7 @@ class IdlInterface(object):
                     overwrite = True
                     break
             if not overwrite:
-                op.defined_in = self
+                # op.defined_in = self
                 self.operations.append(op)
         
         self.constants.extend(parent.constants)
@@ -978,11 +1047,31 @@ class IdlInterface(object):
             else:
                 self.operations_dict[op.name] = [op]
 
+    def is_subclass_of(self, maybe_parent:Union[str, IdlInterface]) -> bool:
+        '''判断某个接口是否为本接口的基类,为了准确表达语义,两接口相等时返回False'''
+        i = self.parent
+        while i:
+            assert type(i) is IdlInterface # 只有在parent被修正为IdlInterface时才可使用此方法
+            if type(maybe_parent) is str:
+                parent_info = i.name
+            else:
+                parent_info = i
+            if maybe_parent == parent_info:
+                return True
+            i = i.parent
+        return False
+    
+    def parent_name(self) -> str:
+        if type(self.parent) is str:
+            return self.parent
+        elif type(self.parent) is IdlInterface:
+            return self.parent.name
+        else:
+            raise Exception(f"Wrong parent type of interface {self.name}")
+
 ################################################################################
 # Attributes
 ################################################################################
-
-
 class IdlAttribute(TypedObject):
     def __init__(self, node=None):
         self.is_read_only = bool(
@@ -1020,6 +1109,20 @@ class IdlAttribute(TypedObject):
                 self.event_type = ''
         else:
             self.is_eventhandler = False
+        
+        self.number_range:NumberRange = None
+        if 'NumberRange' in self.extended_attributes and self.idl_type.is_numeric_type:
+            raw_value = self.extended_attributes['NumberRange']
+            if self.idl_type.is_integer_type:
+                self.number_range = NumberRange.from_string(raw_value, is_float=False)
+            elif self.idl_type.is_floating_type:
+                self.number_range = NumberRange.from_string(raw_value, is_float=True)
+            assert self.number_range
+        
+        self.number_enum:list = []
+        if 'NumberEnum' in self.extended_attributes:
+            raw_value = self.extended_attributes['NumberEnum']
+            self.number_enum = ProcessNumberEnum(self.idl_type, raw_value)
 
     def accept(self, visitor):
         visitor.visit_attribute(self)

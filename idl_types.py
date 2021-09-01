@@ -36,14 +36,16 @@ INTEGER_TYPES = frozenset([
     'long long',
     'unsigned long long',
 ])
-NUMERIC_TYPES = (
-    INTEGER_TYPES | frozenset([
-        # http://www.w3.org/TR/WebIDL/#dfn-numeric-type
-        'float',
-        'unrestricted float',
-        'double',
-        'unrestricted double',
-    ]))
+
+FLOATING_TYPES = frozenset([
+    # http://www.w3.org/TR/WebIDL/#dfn-numeric-type
+    'float',
+    'unrestricted float',
+    'double',
+    'unrestricted double',
+])
+
+NUMERIC_TYPES = (INTEGER_TYPES | FLOATING_TYPES)
 # http://www.w3.org/TR/WebIDL/#dfn-primitive-type
 PRIMITIVE_TYPES = (frozenset(['boolean']) | NUMERIC_TYPES)
 BASIC_TYPES = (
@@ -229,6 +231,10 @@ class IdlType(IdlTypeBase):
         return self.base_type in INTEGER_TYPES
 
     @property
+    def is_floating_type(self):
+        return self.base_type in FLOATING_TYPES
+
+    @property
     def is_void(self):
         return self.base_type == 'void'
 
@@ -256,7 +262,10 @@ class IdlType(IdlTypeBase):
         return self.name in STRING_TYPES
 
     @property
-    @cache
+    def is_record_type(self):
+        return False
+
+    @property
     def name(self):
         """Return type name
 

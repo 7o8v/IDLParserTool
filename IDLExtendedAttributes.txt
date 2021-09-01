@@ -32,9 +32,10 @@
 #
 
 ActiveScriptWrappable
-Affects=Nothing
+Affects=Nothing|Everything
 AllowShared
 CEReactions
+CSSProperty
 CachedAccessor=*
 CachedAttribute=*
 CallWith=ExecutionContext|Isolate|ScriptState|ThisValue
@@ -46,12 +47,12 @@ Constructor
 ConstructorCallWith=ExecutionContext|ScriptState|Document
 ContextEnabled=*
 CrossOrigin=|Getter|Setter
+CrossOriginIsolated
 Custom=|Getter|Setter|LegacyCallAsFunction|PropertyGetter|PropertyEnumerator|PropertyQuery
 CustomConstructor
-CustomElementCallbacks
 DefaultValue=Undefined
 DeprecateAs=*
-DisableInNewIDLCompiler
+DirectSocketEnabled
 DoNotCheckConstants
 DoNotTestNewObject
 EnforceRange
@@ -64,24 +65,28 @@ HighEntropy=|Direct
 HTMLConstructor
 ImmutablePrototype
 ImplementedAs=*
+IsCodeLike
+LegacyLenientSetter
+LegacyLenientThis
+LegacyNoInterfaceObject
+LegacyOverrideBuiltIns
 LegacyTreatAsPartialInterface
+LegacyTreatNonObjectAsNull
 LegacyUnenumerableNamedProperties
+LegacyUnforgeable
 LegacyWindowAlias=*
 LegacyWindowAlias_Measure=|*
 LegacyWindowAlias_RuntimeEnabled=*
-LenientSetter
-LenientThis
 LogActivity=|GetterOnly|SetterOnly
 LogAllWorlds
 NewObject
+NoAllocDirectCall
 Measure
 MeasureAs=*
 NamedConstructor=*
 NamedConstructor_CallWith=Document
 NamedConstructor_RaisesException
-NoInterfaceObject
 NotEnumerable
-OverrideBuiltins
 PartialInterfaceImplementedAs=*
 PermissiveDictionaryConversion
 PerWorldBindings
@@ -106,25 +111,18 @@ Serializable
 SetterCallWith=ExecutionContext|Isolate|ScriptState
 StringContext=TrustedHTML|TrustedScript|TrustedScriptURL
 Transferable
-TreatNonObjectAsNull
 TreatNullAs=EmptyString
 URL
-Unforgeable
 Unscopable
 
-# Not default extended attributes
-IsCodeLike
-LegacyNoInterfaceObject
-LegacyOverrideBuiltIns
-LegacyTreatNonObjectAsNull
-LegacyUnforgeable
-LegacyLenientThis
-LegacyLenientSetter
-NoAllocDirectCall
-LegacyNamespace=*
 
 # self defined
+
+# e.g "(1, 32)" 
 NumberRange=*
+# e.g "(1, 2, 3, 4)"
+NumberEnum=*
+
 DefaultConstrcutorParamters=*
 BooleanOnly=*
 EventHandler
